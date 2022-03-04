@@ -1,0 +1,4 @@
+name = "TriangularGrids"
+uuid = "2d6e2bd4-5d2e-4203-855a-d479d6cb062f"
+authors = ["Felix Horger <felix.horger@kcl.ac.uk>"]
+version = "0.1.0"
