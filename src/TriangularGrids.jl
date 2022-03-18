@@ -1,46 +1,50 @@
 
 module TriangularGrids
 
+	export TriangularGrid
+	import Base: length
+
 	struct TriangularGrid{T <: Real}
 		q1::Vector{T} # q for quantity
 		q2::Vector{T}
 		Δ::Vector{Int64} # How many steps to make in q1 before q2 needs to be increased
 		N::Int64 # Number of combinations of q1 and q2
+
+		# Basic constructor
+		function TriangularGrid(q1::AbstractVector{T}, q2::AbstractVector{T}, Δ::AbstractVector{<: Integer}) where T <: Real
+			@assert all(Δ .> 0)
+			@assert length(q1) >= maximum(Δ)
+			@assert length(q2) == length(Δ)
+			return new{T}(q1, q2, Δ, sum(Δ))
+		end
+
+		# Constructor if Δ has to be determined
+		function TriangularGrid(q1::AbstractVector{T}, q2::AbstractVector{T}) where T <: Real
+			# Check if sorted
+			if any(diff(q1) .<= 0) || any(diff(q2) .<= 0)
+				error("q1 and q2 must be sorted and cannot contain duplicates")
+			end
+			# Only use combinations where q2 > q1
+			Δ = Vector{Int64}(undef, length(q2))
+			local i
+			local j = 1
+			@inbounds for outer i = 1:length(q2)
+				for outer j = j:length(q1)
+					q1[j] > q2[i] && break
+				end
+				if q1[j] > q2[i]
+					j -= 1
+				else
+					break
+				end
+				Δ[i] = j
+			end
+			# Fill remaining elements up with maximum possible Δ
+			Δ[i:end] .= length(q1)
+			return new{T}(q1, q2, Δ, sum(Δ))
+		end
 	end 
 
-	# Basic constructor
-	function TriangularGrid(q1::AbstractVector{T}, q2::AbstractVector{T}, Δ::AbstractVector{<: Integer}) where T <: Real
-		@assert all(Δ .> 0)
-		@assert length(q1) >= maximum(Δ)
-		@assert length(q2) == length(Δ)
-		return new{T}(q1, q2, Δ, sum(Δ))
-	end
-
-	# Constructor if Δ has to be determined
-	function TriangularGrid(q1::AbstractVector{T}, q2::AbstractVector{T}) where T <: Real
-		# Check if sorted
-		if any(diff(q1) .<= 0) || any(diff(q2) .<= 0)
-			error("q1 and q2 must be sorted and cannot contain duplicates")
-		end
-		# Only use combinations where q2 > q1
-		Δ = Vector{Int64}(undef, length(q2))
-		local i
-		local j = 1
-		@inbounds for outer i = 1:length(q2)
-			for outer j = j:length(q1)
-				q1[j] > q2[i] && break
-			end
-			if q1[j] > q2[i]
-				j -= 1
-			else
-				break
-			end
-			Δ[i] = j
-		end
-		# Fill remaining elements up with maximum possible Δ
-		Δ[i:end] .= length(q1)
-		return new{T}(q1, q2, Δ, sum(Δ))
-	end
 
 
 	"""
@@ -76,19 +80,25 @@ module TriangularGrids
 		end)
 	end
 
-	function combinations(grid::TriangularGrid{T})::Matrix{T} where T <: Real
-		q = Matrix{T}(undef, 2, grid.N)
+	function convert(::Type{TriangularGrid{<: T}}, b::TriangularGrid) where T
+		TriangularGrid(convert(T, b.q1), convert(T, b.q2), b.Δ)
+	end
+
+	@inline function length(grid::TriangularGrid)
+		grid.N
+	end
+
+	function combinations(grid::TriangularGrid{T})::Vector{NTuple{2, T}} where T <: Real
+		q = Vector{NTuple{2, T}}(undef, grid.N)
 		@iterate(
 			grid,
 			# Do nothing in the outer loop
 			nothing,
 			# Store q1 and q2 in the inner loop
-			begin
-				q[1, l] = grid.q1[m]
-				q[2, l] = grid.q2[n]
-			end
+			q[l] = (grid.q1[m], grid.q2[n])
 		)
 		return q
 	end
+
 end
 
