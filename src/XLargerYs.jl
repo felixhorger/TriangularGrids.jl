@@ -12,7 +12,7 @@ module XLargerYs
 
 		# Basic constructor
 		function XLargerY(x::AbstractVector{T}, y::AbstractVector{T}, Δ::AbstractVector{<: Integer}) where T <: Real
-			@assert all(Δ .> 0)
+			@assert all(δ -> δ > 0, Δ)
 			@assert length(x) >= maximum(Δ)
 			@assert length(y) == length(Δ)
 			return new{T}(x, y, Δ, sum(Δ))
@@ -48,30 +48,30 @@ module XLargerYs
 
 
 	"""
-		 XLargerYs.iterate(xly, loop2, loop1)
+		 XLargerYs.iterate(xly, outer_loop, inner_loop)
 
 		 Two loops, one for y (outer) and one for x (inner).
 		 For your purposes, use a vector with the length of XLargerY.N.
 		 In each iteration of y, the respective elements in that array are in i:j (x varies over these).
 
-		 loop2: iterate through y.
+		 outer_loop: iterate through y.
 		 Do everything independent of x here.
 		 To get the respective y use `xly.y[n]`.
 		
-		 loop1: x varies
+		 inner_loop: x varies
 		 To get the respective x use `xly.x[m]`.
 		 Additionally, index `l` is provided according to `l = i:j`.
 
 		 No @inbounds is used.
 	"""
-	macro iterate(xly, loop2, loop1)
+	macro iterate(xly, outer_loop, inner_loop)
 		esc(quote
 			local i = 1
 			for (n, δ) = enumerate($xly.Δ)
 				j = i + δ - 1
-				$loop2
+				$outer_loop
 				for (m, l) = enumerate(i:j)
-					$loop1
+					$inner_loop
 				end
 				i += δ
 			end
