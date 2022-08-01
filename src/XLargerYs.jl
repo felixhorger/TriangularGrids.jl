@@ -7,15 +7,15 @@ module XLargerYs
 	struct XLargerY{T <: Real}
 		x::Vector{T}
 		y::Vector{T}
-		Δ::Vector{Int64} # How many steps to make in x before y needs to be increased
+		upper::Vector{Int64} # Upper index in y so that x > y holds
 		N::Int64 # Number of combinations of x and y
 
 		# Basic constructor
-		function XLargerY(x::AbstractVector{T}, y::AbstractVector{T}, Δ::AbstractVector{<: Integer}) where T <: Real
-			@assert all(δ -> δ > 0, Δ)
-			@assert length(x) >= maximum(Δ)
-			@assert length(y) == length(Δ)
-			return new{T}(x, y, Δ, sum(Δ))
+		function XLargerY(x::AbstractVector{T}, y::AbstractVector{T}, upper::AbstractVector{<: Integer}) where T <: Real
+			@assert all(u -> u > 0, upper)
+			@assert length(x) == length(upper)
+			@assert length(y) >= maximum(upper)
+			return new{T}(x, y, upper, sum(upper))
 		end
 
 		# Constructor if Δ has to be determined
@@ -24,24 +24,29 @@ module XLargerYs
 			if any(diff(x) .<= 0) || any(diff(y) .<= 0)
 				error("x and y must be sorted and cannot contain duplicates")
 			end
-			# Only use combinations where y > x
-			Δ = Vector{Int64}(undef, length(y))
+			# Only use combinations where x > y
+			upper = Vector{Int64}(undef, length(x))
 			local i
 			local j = 1
-			@inbounds for outer i = 1:length(y)
-				for outer j = j:length(x)
-					x[j] > y[i] && break
+			@inbounds for outer i = 1:length(x)
+				found = false
+				for outer j = j:length(y)
+					if x[i] ≤ y[j]
+						found = true
+						break
+					end
 				end
-				if x[j] > y[i]
-					j -= 1
-				else
+				if found
+					j == 1 && error("Smallest x is less than or equal to smallest y")
+					i == length(x) && error("Largest y is equal to or larger than largest x")
+				else # Not found an upper
 					break
 				end
-				Δ[i] = j
+				upper[i] = j-1
 			end
 			# Fill remaining elements up with maximum possible Δ
-			Δ[i:end] .= length(x)
-			return new{T}(x, y, Δ, sum(Δ))
+			upper[i:end] .= length(y)
+			return new{T}(x, y, upper, sum(upper))
 		end
 	end 
 
@@ -50,16 +55,16 @@ module XLargerYs
 	"""
 		 XLargerYs.iterate(xly, outer_loop, inner_loop)
 
-		 Two loops, one for y (outer) and one for x (inner).
+		 Two loops, one for x (outer) and one for y (inner).
 		 For your purposes, use a vector with the length of XLargerY.N.
-		 In each iteration of y, the respective elements in that array are in i:j (x varies over these).
+		 In each iteration of x, the respective elements in that array are in i:j (y varies over these).
 
-		 outer_loop: iterate through y.
-		 Do everything independent of x here.
-		 To get the respective y use `xly.y[n]`.
+		 outer_loop: iterate through x.
+		 Do everything independent of y here.
+		 To get the respective x use `xly.x[n]`.
 		
-		 inner_loop: x varies
-		 To get the respective x use `xly.x[m]`.
+		 inner_loop: y varies
+		 To get the respective y use `xly.y[m]`.
 		 Additionally, index `l` is provided according to `l = i:j`.
 
 		 No @inbounds is used.
@@ -67,19 +72,20 @@ module XLargerYs
 	macro iterate(xly, outer_loop, inner_loop)
 		esc(quote
 			local i = 1
-			for (n, δ) = enumerate($xly.Δ)
-				j = i + δ - 1
+			local j = 0
+			for (n, u) = enumerate($xly.upper)
+				j += u
 				$outer_loop
 				for (m, l) = enumerate(i:j)
 					$inner_loop
 				end
-				i += δ
+				i += u
 			end
 		end)
 	end
 
 	function convert(::Type{XLargerY{<: T}}, b::XLargerY) where T
-		XLargerY(convert(T, b.x), convert(T, b.y), b.Δ)
+		XLargerY(convert(T, b.x), convert(T, b.y), b.upper)
 	end
 
 	@inline function length(xly::XLargerY)
@@ -93,7 +99,7 @@ module XLargerYs
 			# Do nothing in the outer loop
 			nothing,
 			# Store x and y in the inner loop
-			q[l] = (xly.x[m], xly.y[n])
+			q[l] = (xly.x[n], xly.y[m])
 		)
 		return q
 	end
