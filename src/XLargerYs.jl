@@ -88,9 +88,7 @@ module XLargerYs
 		XLargerY(convert(T, b.x), convert(T, b.y), b.upper)
 	end
 
-	@inline function length(xly::XLargerY)
-		xly.N
-	end
+	length(xly::XLargerY) = xly.N
 
 	function combinations(xly::XLargerY{T})::Vector{NTuple{2, T}} where T <: Real
 		q = Vector{NTuple{2, T}}(undef, xly.N)
